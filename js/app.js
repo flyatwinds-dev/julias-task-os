@@ -90,7 +90,7 @@ function render(requery = true) {
   const filtering = workspace || ["search", "status-filter", "project-filter", "priority-filter"].some((id) => $(`#${id}`).value);
   $("#task-count").textContent = `${visible.length} 個任務`;
   $("#task-list").innerHTML = visible.length
-    ? taskTree(visible, filtering ? new Set() : collapsed).map(({ task, depth }) => taskRow(task, depth)).join("")
+    ? taskTree(visible, filtering ? new Set() : collapsed).map(({ task, depth }) => taskRow(task, depth, !!filtering)).join("")
     : '<div class="empty">目前沒有符合的任務，為今天留下一個小目標吧 ✧</div>';
   const focus = focusIds
     .map((id) => tasks.find((t) => t.task_id === id))
@@ -116,11 +116,12 @@ function render(requery = true) {
       }</article>`,
   ).join("");
 }
-function taskRow(t, depth = 0) {
+function taskRow(t, depth = 0, filtering = false) {
   const children = tasks.filter((child) => child.parent_task_id === t.task_id);
   const path = taskAncestors(tasks, t).map((a) => a.title).join(" / ");
   const hierarchy = `${path ? `<small class="parent-path">上層：${escape(path)}</small>` : ""}${children.length ? `<small class="child-progress">子任務 ${children.filter((c) => c.status === "completed").length} / ${children.length} 完成</small>` : ""}`;
-  const toggle = children.length ? `<button class="tree-toggle" data-toggle="${t.task_id}" aria-expanded="${!collapsed.has(t.task_id)}" aria-label="${collapsed.has(t.task_id) ? "展開" : "收合"} ${escape(t.title)}">${collapsed.has(t.task_id) ? "▸" : "▾"}</button>` : "";
+  const isCollapsed = !filtering && collapsed.has(t.task_id);
+  const toggle = children.length ? `<button class="tree-toggle" data-toggle="${t.task_id}" aria-expanded="${!isCollapsed}" ${filtering ? 'disabled title="搜尋與篩選時展開所有符合任務；清除條件後可收合"' : ""} aria-label="${isCollapsed ? "展開" : "收合"} ${escape(t.title)}">${isCollapsed ? "▸" : "▾"}</button>` : "";
   const overdue = isOverdue(t);
   return `<article class="task-row ${t.status === "completed" ? "completed" : ""}" data-task-id="${t.task_id}" style="--depth:${Math.min(depth, 4)}"><div class="task-title">${toggle}<input type="checkbox" data-complete="${t.task_id}" aria-label="完成 ${escape(t.title)}" ${t.status === "completed" ? "checked" : ""}><div><button class="title-button" data-edit="${t.task_id}">${escape(t.title)}</button><small>${statusLabels[t.status]}${t.planned_date === localDate() ? " · 今日計畫" : ""}</small>${hierarchy}</div></div><div class="task-project"><span class="project-name">${escape(projectName(t.project_id))}</span><span class="workspace-name">${escape(workspaceName(t.workspace_id))}</span></div><span class="priority ${t.priority}">${priorityLabels[t.priority]}</span><span class="due ${overdue ? "overdue" : ""}">${t.due_at ? escape(new Date(t.due_at).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })) : "無截止日期"}${overdue ? "<br>已逾期" : ""}</span><div class="row-actions"><button data-add-child="${t.task_id}" aria-label="新增子任務 ${escape(t.title)}">＋</button><button data-edit="${t.task_id}" aria-label="編輯 ${escape(t.title)}">✎</button><button data-delete="${t.task_id}" aria-label="刪除 ${escape(t.title)}">×</button></div></article>`;
 }

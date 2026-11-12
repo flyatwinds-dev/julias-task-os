@@ -31,7 +31,13 @@ const assert = require("node:assert/strict");
   assert.equal(await row("階層子任務").count(), 0);
   await page.locator("#search").fill("階層");
   assert.equal(await page.locator(".task-row").count(), 2);
+  // Matching parents must expose their actual expanded state during filtering.
+  await page.locator("#search").fill("階層子任務");
+  await page.locator("#priority-filter").selectOption("low");
   await page.locator("#search").fill("");
+  assert.equal(await row("階層子任務").locator("[data-toggle]").getAttribute("aria-expanded"), "true");
+  assert.equal(await row("階層子任務").locator("[data-toggle]").isDisabled(), true);
+  await page.locator("#priority-filter").selectOption("");
   await row(parent).locator("[data-toggle]").click();
   await row(parent).locator("[data-complete]").check();
   assert.equal(await row("階層子任務").locator("[data-complete]").isChecked(), false);

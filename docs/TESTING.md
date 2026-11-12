@@ -16,6 +16,6 @@
 
 ## 範圍限制
 
-僅自動驗證 Chromium，未在真實 iOS / Android 或 Safari、Firefox 執行。沒有 Google 帳號、Apps Script、Sheets 或跨裝置同步測試，這些功能尚未實作。未連接 Google 或部署其他服務。GitHub API 與 Pages 網址在此環境回應 403，不能以本機測試宣稱遠端 Pages 已發布。
+僅自動驗證 Chromium，未在真實 iOS / Android 或 Safari、Firefox 執行。沒有 Google 帳號、Apps Script、Sheets 或跨裝置同步測試，這些功能尚未實作。未連接 Google 或部署其他服務。2026-11-12 重跑 6 項資料測試及兩套 Chromium 端到端測試均通過；另驗證篩選時展開按鈕的 aria-expanded 與停用狀態。GitHub API 已可讀取，確認既有 Pages 來源為 dev/task-os-foundation。
 
 重現指令見 README；截圖是測試產物，存於 `/tmp`，不納入 Git。

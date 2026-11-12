@@ -49,7 +49,19 @@ export function createDemoAdapter(seed = true) {
       throw new Error("無效的截止時間");
     if (input.planned_date && !/^\d{4}-\d{2}-\d{2}$/.test(input.planned_date))
       throw new Error("無效的計畫日期");
-    return { ...input, title };
+    const parent = input.parent_task_id || null;
+    if (parent) {
+      const visited = new Set(input.task_id ? [input.task_id] : []);
+      let current = parent;
+      while (current) {
+        if (visited.has(current)) throw new Error("任務不能隸屬自己或其子孫任務");
+        visited.add(current);
+        const ancestor = tasks.find((t) => t.task_id === current && !t.deleted_at);
+        if (!ancestor) throw new Error("找不到上層任務");
+        current = ancestor.parent_task_id;
+      }
+    }
+    return { ...input, title, parent_task_id: parent };
   };
   const api = {
     async listTasks() {
@@ -93,6 +105,7 @@ export function createDemoAdapter(seed = true) {
         "priority",
         "planned_date",
         "due_at",
+        "parent_task_id",
       ];
       const changes = Object.fromEntries(
         Object.entries(patch).filter(([k]) => allowed.includes(k)),
@@ -108,9 +121,16 @@ export function createDemoAdapter(seed = true) {
         status: completed ? "completed" : "open",
       });
     },
-    async deleteTask(taskId) {
+    async deleteTask(taskId, { children: policy } = {}) {
       const t = tasks.find((t) => t.task_id === taskId && !t.deleted_at);
       if (!t) throw new Error("找不到任務");
+      const children = tasks.filter((child) => !child.deleted_at && child.parent_task_id === taskId);
+      if (children.length && policy !== "detach")
+        throw new Error("請明確選擇將子任務改為獨立後再刪除上層");
+      for (const child of children) {
+        child.parent_task_id = null;
+        child.updated_at = now();
+      }
       t.deleted_at = now();
       t.updated_at = t.deleted_at;
       return copy(t);
@@ -141,6 +161,7 @@ export function createDemoAdapter(seed = true) {
       offset,
     ) => ({
       task_id: id(),
+      parent_task_id: null,
       title,
       description: "給自己一點空間，慢慢完成就好。",
       workspace_id,

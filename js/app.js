@@ -1,5 +1,5 @@
 import { data, WORKSPACES, isOverdue, localDate } from "./data.js";
-import { queryTasks, similarTasks } from "./query.js";
+import { queryTasks, similarTasks, taskAncestors, taskTree } from "./query.js";
 const $ = (s) => document.querySelector(s);
 const escape = (s) =>
   String(s ?? "").replace(
@@ -16,6 +16,7 @@ let tasks = [],
   visibleIds = [],
   focusIds = [],
   timer;
+const collapsed = new Set();
 const priorityLabels = { high: "高優先", medium: "中優先", low: "低優先" };
 const statusLabels = { open: "Open", doing: "Doing", completed: "Completed" };
 const form = $("#task-form");
@@ -85,9 +86,11 @@ function render(requery = true) {
   const visible = visibleIds
     .map((id) => tasks.find((t) => t.task_id === id))
     .filter(Boolean);
+  // Searches and filters reveal every match, including descendants of collapsed matches.
+  const filtering = workspace || ["search", "status-filter", "project-filter", "priority-filter"].some((id) => $(`#${id}`).value);
   $("#task-count").textContent = `${visible.length} 個任務`;
   $("#task-list").innerHTML = visible.length
-    ? visible.map(taskRow).join("")
+    ? taskTree(visible, filtering ? new Set() : collapsed).map(({ task, depth }) => taskRow(task, depth)).join("")
     : '<div class="empty">目前沒有符合的任務，為今天留下一個小目標吧 ✧</div>';
   const focus = focusIds
     .map((id) => tasks.find((t) => t.task_id === id))
@@ -113,9 +116,13 @@ function render(requery = true) {
       }</article>`,
   ).join("");
 }
-function taskRow(t) {
+function taskRow(t, depth = 0) {
+  const children = tasks.filter((child) => child.parent_task_id === t.task_id);
+  const path = taskAncestors(tasks, t).map((a) => a.title).join(" / ");
+  const hierarchy = `${path ? `<small class="parent-path">上層：${escape(path)}</small>` : ""}${children.length ? `<small class="child-progress">子任務 ${children.filter((c) => c.status === "completed").length} / ${children.length} 完成</small>` : ""}`;
+  const toggle = children.length ? `<button class="tree-toggle" data-toggle="${t.task_id}" aria-expanded="${!collapsed.has(t.task_id)}" aria-label="${collapsed.has(t.task_id) ? "展開" : "收合"} ${escape(t.title)}">${collapsed.has(t.task_id) ? "▸" : "▾"}</button>` : "";
   const overdue = isOverdue(t);
-  return `<article class="task-row ${t.status === "completed" ? "completed" : ""}" data-task-id="${t.task_id}"><div class="task-title"><input type="checkbox" data-complete="${t.task_id}" aria-label="完成 ${escape(t.title)}" ${t.status === "completed" ? "checked" : ""}><div><button class="title-button" data-edit="${t.task_id}">${escape(t.title)}</button><small>${statusLabels[t.status]}${t.planned_date === localDate() ? " · 今日計畫" : ""}</small></div></div><div class="task-project"><span class="project-name">${escape(projectName(t.project_id))}</span><span class="workspace-name">${escape(workspaceName(t.workspace_id))}</span></div><span class="priority ${t.priority}">${priorityLabels[t.priority]}</span><span class="due ${overdue ? "overdue" : ""}">${t.due_at ? escape(new Date(t.due_at).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })) : "無截止日期"}${overdue ? "<br>已逾期" : ""}</span><div class="row-actions"><button data-edit="${t.task_id}" aria-label="編輯 ${escape(t.title)}">✎</button><button data-delete="${t.task_id}" aria-label="刪除 ${escape(t.title)}">×</button></div></article>`;
+  return `<article class="task-row ${t.status === "completed" ? "completed" : ""}" data-task-id="${t.task_id}" style="--depth:${Math.min(depth, 4)}"><div class="task-title">${toggle}<input type="checkbox" data-complete="${t.task_id}" aria-label="完成 ${escape(t.title)}" ${t.status === "completed" ? "checked" : ""}><div><button class="title-button" data-edit="${t.task_id}">${escape(t.title)}</button><small>${statusLabels[t.status]}${t.planned_date === localDate() ? " · 今日計畫" : ""}</small>${hierarchy}</div></div><div class="task-project"><span class="project-name">${escape(projectName(t.project_id))}</span><span class="workspace-name">${escape(workspaceName(t.workspace_id))}</span></div><span class="priority ${t.priority}">${priorityLabels[t.priority]}</span><span class="due ${overdue ? "overdue" : ""}">${t.due_at ? escape(new Date(t.due_at).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })) : "無截止日期"}${overdue ? "<br>已逾期" : ""}</span><div class="row-actions"><button data-add-child="${t.task_id}" aria-label="新增子任務 ${escape(t.title)}">＋</button><button data-edit="${t.task_id}" aria-label="編輯 ${escape(t.title)}">✎</button><button data-delete="${t.task_id}" aria-label="刪除 ${escape(t.title)}">×</button></div></article>`;
 }
 function setView(next) {
   view = next;
@@ -163,8 +170,14 @@ function duplicateMessage() {
     ? `發現相似任務：「${matches[0].title}」。若是不同的小事，仍可按「儲存任務」繼續新增。`
     : "";
 }
-function openTask(task = null, title = "") {
+function openTask(task = null, title = "", parentId = "") {
   form.reset();
+  const candidates = tasks.filter((candidate) => candidate.task_id !== task?.task_id &&
+    !taskAncestors(tasks, candidate).some((a) => a.task_id === task?.task_id));
+  field("parent_task_id").innerHTML = '<option value="">獨立任務（無上層）</option>' +
+    options(candidates.map((t) => ({ ...t, path: [...taskAncestors(tasks, t), t].map((a) => a.title).join(" / ") })), "task_id", "path");
+  field("parent_task_id").value = task?.parent_task_id || parentId;
+  if (parentId) for (const ancestor of [...taskAncestors(tasks, tasks.find((t) => t.task_id === parentId)), tasks.find((t) => t.task_id === parentId)]) collapsed.delete(ancestor.task_id);
   field("task_id").value = task?.task_id || "";
   field("workspace_id").innerHTML =
     '<option value="">暫不分類</option>' + options(WORKSPACES, "id", "name");
@@ -243,13 +256,25 @@ document.addEventListener("change", (event) => {
     });
 });
 document.addEventListener("click", (event) => {
+  const toggle = event.target.closest("[data-toggle]");
+  if (toggle) {
+    const id = toggle.dataset.toggle;
+    collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id);
+    render(false);
+  }
+  const child = event.target.closest("[data-add-child]");
+  if (child) openTask(null, "", child.dataset.addChild);
   const edit = event.target.closest("[data-edit]");
   const del = event.target.closest("[data-delete]");
   const close = event.target.closest("[data-close]");
   if (edit) openTask(tasks.find((t) => t.task_id === edit.dataset.edit));
-  if (del && confirm("要將這個任務移到已刪除嗎？（Demo 軟刪除）"))
+  const childCount = del ? tasks.filter((t) => t.parent_task_id === del.dataset.delete).length : 0;
+  if (del && confirm(childCount
+    ? `此任務有 ${childCount} 個直接子任務。刪除後將改為獨立任務，其下任務、狀態與日期全部保留。確定刪除上層嗎？`
+    : "要將這個任務移到已刪除嗎？（Demo 軟刪除）"))
     run(async () => {
-      await data.deleteTask(del.dataset.delete);
+      await data.deleteTask(del.dataset.delete, { children: "detach" });
+      collapsed.delete(del.dataset.delete);
       await refresh(false);
       toast("任務已軟刪除");
     });

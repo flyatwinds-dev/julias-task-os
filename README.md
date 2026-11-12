@@ -1,6 +1,6 @@
 # Julia's Task OS
 
-溫柔、可愛的個人任務管理前端。原生 HTML / CSS / JavaScript，無執行期套件、外部字型、付費 API、資料庫或登入服務。
+溫柔、可愛的個人任務管理前端。原生 HTML / CSS / JavaScript，無執行期套件、外部字型請求、付費 API、資料庫或登入服務。
 
 ## 預覽
 
@@ -23,6 +23,16 @@ python3 -m http.server 8000 --bind 0.0.0.0
 - Pastel Dream / Cozy Studio；桌面側欄、手機底部分頁。主題偏好可保存在此瀏覽器 localStorage。
 - 逾期由截止時間與未完成狀態即時計算，每分鐘更新指標，不是獨立任務狀態。日期輸入與 Today’s Focus 使用瀏覽器本地時區，截止時間轉為 ISO 字串儲存。
 
+## 字型與任務階層
+
+中文使用 jf open 粉圓 2.1，英文與數字使用 Montserrat。字型隨網站本地提供，不向 Google 或其他字型服務發送請求；保留 Noto Sans TC、Microsoft JhengHei 與 sans-serif 備用字體。來源與完整授權見 [assets/fonts/README.md](assets/fonts/README.md)。
+
+每個任務有 `parent_task_id`，無上層時為 `null`。新增子任務或編輯上層選單可指定、更換上層，也可改為獨立；資料層拒絕自己、子孫或不存在／已刪除的上層。階層不限制 Workspace 或專案，子任務保有自己的分類、狀態、日期與優先級。完成上層不會連動子任務。
+
+清單依階層展開／收合，顯示完整上層路徑與直接子任務完成數；同層保留所選排序。搜尋與篩選期間自動顯示所有符合項目，未符合的上層不加入結果；清除條件後恢復原有收合狀態。計數為符合條件的任務總數，包含收合項目。
+
+刪除有子任務的上層時會先確認：直接子任務改為獨立，其下任務及欄位全部保留。資料層呼叫 `deleteTask(id, { children: "detach" })` 才允許此操作；未明確指定策略則拒絕且不修改資料。
+
 ## Demo Mode 與資料界線
 
 **所有任務及專案只在本頁記憶體。重新整理會重設為 Demo Data，關閉頁面即消失。沒有雲端同步，也不會向 Google 傳送資料。** 不建議輸入需要保存的真實工作資料。只有主題偏好可跨重新整理保存。
@@ -44,6 +54,7 @@ git diff --check
 ```sh
 npm install --prefix /tmp/julia-browser --cache /tmp/julia-npm-cache --no-package-lock --no-audit --no-fund playwright@1.65.0
 NODE_PATH=/tmp/julia-browser/node_modules node tests/browser.cjs
+NODE_PATH=/tmp/julia-browser/node_modules node tests/hierarchy-browser.cjs
 ```
 
 需系統 Chromium（預設 `/usr/bin/chromium`）；可用 `CHROMIUM_PATH` 指定路徑，`BASE_URL` 指定測試網址。截圖預設寫入 `/tmp/julia-desktop.png`、`/tmp/julia-mobile.png`。測試會操作暫時 Demo 資料，不改寫儲存庫或外部服務。
@@ -60,4 +71,4 @@ NODE_PATH=/tmp/julia-browser/node_modules node tests/browser.cjs
 
 ## Roadmap（未實作）
 
-Google 登入、雲端同步、Google Sheets / Apps Script 部署、Idea Dump、Kanban 拖曳、Calendar、重複任務、附件、XP / Level、Achievements、Review、自動備份與 AI API。本次不部署正式網站。
+Google 登入、雲端同步、Google Sheets / Apps Script 部署、Idea Dump、Kanban 拖曳、Calendar、重複任務、附件、XP / Level、Achievements、Review、自動備份與 AI API。維持現有 GitHub Pages，由 `dev/task-os-foundation` 分支更新，不部署其他服務。

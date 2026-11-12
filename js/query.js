@@ -55,3 +55,34 @@ export function similarTasks(tasks, title, exclude = "") {
     );
   });
 }
+
+// Only matching tasks enter the tree; a filtered-out parent never hides a match.
+export function taskAncestors(tasks, task) {
+  const byId = new Map(tasks.map((t) => [t.task_id, t]));
+  const result = [], seen = new Set([task.task_id]);
+  let current = byId.get(task.parent_task_id);
+  while (current && !seen.has(current.task_id)) {
+    seen.add(current.task_id);
+    result.unshift(current);
+    current = byId.get(current.parent_task_id);
+  }
+  return result;
+}
+export function taskTree(matches, collapsed = new Set()) {
+  const ids = new Set(matches.map((t) => t.task_id));
+  const children = new Map();
+  for (const task of matches) {
+    const parent = ids.has(task.parent_task_id) ? task.parent_task_id : null;
+    if (!children.has(parent)) children.set(parent, []);
+    children.get(parent).push(task);
+  }
+  const result = [];
+  const visit = (parent, depth) => {
+    for (const task of children.get(parent) || []) {
+      result.push({ task, depth });
+      if (!collapsed.has(task.task_id)) visit(task.task_id, depth + 1);
+    }
+  };
+  visit(null, 0);
+  return result;
+}

@@ -1,3 +1,16 @@
+@font-face {
+  font-family: "Montserrat";
+  src: url("assets/fonts/Montserrat.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0000-024F, U+1E00-1EFF;
+}
+@font-face {
+  font-family: "jf open 粉圓";
+  src: url("assets/fonts/jf-openhuninn-2.1.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
 :root {
   --bg: #faf8f6;
   --panel: #fffefd;
@@ -32,8 +45,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font:
-    14px "DM Sans",
-    "Noto Sans TC",
+    14px "Montserrat",
+    "jf open 粉圓", "Noto Sans TC", "Microsoft JhengHei",
     sans-serif;
 }
 button,
@@ -413,7 +426,7 @@ h2 span {
   font-size: 15px;
 }
 .quick-decoration span {
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-style: italic;
   font-size: 12px;
   padding: 0 12px;
@@ -459,7 +472,7 @@ h2 span {
   grid-template-columns: minmax(170px, 2.4fr) minmax(
       110px,
       1.4fr
-    ) 80px 105px 72px;
+    ) 80px 105px 105px;
   gap: 12px;
   align-items: center;
   padding: 16px 20px;
@@ -884,4 +897,13 @@ dialog label {
   .mobile-theme {
     display: none;
   }
+}
+
+.task-title { padding-inline-start: calc(var(--depth, 0) * 14px); }
+.task-title > div { min-width: 0; }
+.parent-path, .child-progress { overflow-wrap: anywhere; }
+.tree-toggle { flex-shrink: 0; padding: 4px; }
+.row-actions { flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .task-title { gap: 6px; padding-inline-start: calc(var(--depth, 0) * 6px); }
 }

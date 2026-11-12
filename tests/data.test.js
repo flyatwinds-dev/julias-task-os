@@ -112,3 +112,43 @@ test("search, combined filters, all sort modes and duplicate detection", () => {
   assert.equal(similarTasks(tasks, "首頁設計稿").length, 1);
   assert.equal(similarTasks(tasks, "首頁設計", "1").length, 0);
 });
+
+test("hierarchy validates parents and cycles, preserves independent task fields and deletion", async () => {
+  const api = createDemoAdapter(false);
+  const a = await api.createTask({ title: "上層" });
+  const b = await api.createTask({ title: "子任務", parent_task_id: a.task_id, priority: "high", planned_date: "2026-11-12" });
+  const c = await api.createTask({ title: "孫任務", parent_task_id: b.task_id });
+  assert.equal(a.parent_task_id, null);
+  await assert.rejects(api.createTask({ title: "無效", parent_task_id: "missing" }));
+  await assert.rejects(api.updateTask(a.task_id, { parent_task_id: a.task_id }));
+  await assert.rejects(api.updateTask(a.task_id, { parent_task_id: c.task_id }));
+  await api.completeTask(a.task_id);
+  assert.deepEqual((await api.listTasks()).find((t) => t.task_id === b.task_id), b);
+  await assert.rejects(api.deleteTask(a.task_id));
+  assert.equal((await api.listTasks()).length, 3);
+  await api.deleteTask(a.task_id, { children: "detach" });
+  const remaining = await api.listTasks();
+  assert.equal(remaining.length, 2);
+  assert.equal(remaining[0].parent_task_id, null);
+  assert.equal(remaining[0].priority, "high");
+  assert.equal(remaining[0].planned_date, "2026-11-12");
+  assert.equal(remaining[1].parent_task_id, b.task_id);
+  await assert.rejects(api.updateTask(b.task_id, { parent_task_id: a.task_id }));
+  const other = await api.createTask({ title: "另一上層" });
+  assert.equal((await api.updateTask(b.task_id, { parent_task_id: other.task_id })).parent_task_id, other.task_id);
+  assert.equal((await api.updateTask(b.task_id, { parent_task_id: null })).parent_task_id, null);
+});
+
+test("hierarchy keeps query order among siblings, paths and matches with filtered parents", async () => {
+  const { taskAncestors, taskTree } = await import("../js/query.js");
+  const tasks = [
+    { task_id: "a", title: "A", parent_task_id: null, priority: "low" },
+    { task_id: "b", title: "B", parent_task_id: "a", priority: "medium" },
+    { task_id: "c", title: "C", parent_task_id: "b", priority: "high" },
+    { task_id: "d", title: "D", parent_task_id: "a", priority: "high" },
+  ];
+  assert.deepEqual(taskAncestors(tasks, tasks[2]).map((t) => t.task_id), ["a", "b"]);
+  assert.deepEqual(taskTree(queryTasks(tasks, { sort: "priority" })).map(({ task }) => task.task_id), ["a", "d", "b", "c"]);
+  assert.deepEqual(taskTree(tasks, new Set(["b"])).map(({ task }) => task.task_id), ["a", "b", "d"]);
+  assert.equal(taskTree(queryTasks(tasks, { search: "C" }), new Set(["a", "b"]))[0].task.task_id, "c");
+});
